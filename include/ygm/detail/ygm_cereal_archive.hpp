@@ -40,6 +40,10 @@ class YGMOutputArchive
       : OutputArchive<YGMOutputArchive, AllowEmptyClassElision>(this),
         vec_data(stream) {}
 
+  YGMOutputArchive(const YGMOutputArchive& oa)
+      : OutputArchive<YGMOutputArchive, AllowEmptyClassElision>(this),
+        vec_data(oa.vec_data) {}
+
   ~YGMOutputArchive() CEREAL_NOEXCEPT = default;
 
   //! Writes size bytes of data to the output stream

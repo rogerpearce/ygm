@@ -12,9 +12,9 @@
 #include <thread>
 #include <vector>
 
+#include <ygm/detail/meta/functional.hpp>
 #include <ygm/detail/mpi.hpp>
 #include <ygm/detail/ygm_cereal_archive.hpp>
-#include <ygm/detail/meta/functional.hpp>
 
 namespace ygm {
 
@@ -29,6 +29,9 @@ class comm::impl {
     m_buffer_capacity_bytes = buffer_capacity;
 
     m_vec_send_buffers.resize(m_comm_size);
+    for (size_t i = 0; i < m_vec_send_buffers.size(); ++i) {
+      m_vec_oarchive.push_back(cereal::YGMOutputArchive(m_vec_send_buffers[i]));
+    }
     // launch listener thread
     m_listener = std::thread(&impl::listener_thread, this);
   }
@@ -63,8 +66,9 @@ class comm::impl {
       if (m_vec_send_buffers[dest].empty()) {
         m_send_dest_queue.push_back(dest);
       }
-      size_t bytes = pack_lambda(m_vec_send_buffers[dest],
-                                 std::forward<const SendArgs>(args)...);
+      size_t size_before = m_vec_send_buffers[dest].size();
+      pack_lambda(m_vec_oarchive[dest], std::forward<const SendArgs>(args)...);
+      size_t bytes = m_vec_send_buffers[dest].size() - size_before;
       m_local_bytes_sent += bytes;
       m_send_buffer_bytes += bytes;
 
@@ -279,6 +283,7 @@ class comm::impl {
       m_send_buffer_bytes -= m_vec_send_buffers[dest].size();
     }
     m_vec_send_buffers[dest].clear();
+    //m_vec_oarchive[dest] = cereal::YGMOutputArchive(m_vec_send_buffers[dest]);
   }
 
   /**
@@ -380,9 +385,8 @@ class comm::impl {
   }
 
   template <typename Lambda, typename... PackArgs>
-  size_t pack_lambda(std::vector<std::byte> &packed, Lambda l,
-                     const PackArgs &... args) {
-    size_t                        size_before = packed.size();
+  void pack_lambda(cereal::YGMOutputArchive &oarchive, Lambda l,
+                   const PackArgs &... args) {
     const std::tuple<PackArgs...> tuple_args(
         std::forward<const PackArgs>(args)...);
     ASSERT_DEBUG(sizeof(Lambda) == 1);
@@ -398,11 +402,8 @@ class comm::impl {
           ygm::meta::apply_optional(*pl, std::move(t1), std::move(ta));
         };
 
-    cereal::YGMOutputArchive oarchive(packed);  // Create an output archive
-                                                // // oarchive(fun_ptr);
     int64_t iptr = (int64_t)fun_ptr - (int64_t)&reference;
     oarchive(iptr, tuple_args);
-    return packed.size() - size_before;
   }
 
   /**
@@ -444,9 +445,10 @@ class comm::impl {
   int      m_comm_rank;
   size_t   m_buffer_capacity_bytes;
 
-  std::vector<std::vector<std::byte>> m_vec_send_buffers;
-  size_t                              m_send_buffer_bytes = 0;
-  std::deque<int>                     m_send_dest_queue;
+  std::vector<std::vector<std::byte>>   m_vec_send_buffers;
+  std::vector<cereal::YGMOutputArchive> m_vec_oarchive;
+  size_t                                m_send_buffer_bytes = 0;
+  std::deque<int>                       m_send_dest_queue;
 
   std::deque<std::pair<std::shared_ptr<std::byte[]>, size_t>> m_recv_queue;
   std::mutex m_recv_queue_mutex;
