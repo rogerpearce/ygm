@@ -9,6 +9,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <ygm/io/detail/aws_s3.hpp>
 
 namespace ygm::io {
 
@@ -51,62 +52,22 @@ class line_parser {
   void for_all(Function fn) {
     if (m_node_local_filesystem) {
       ASSERT_RELEASE(false);
-      if (m_paths.empty()) return;
+      if (m_paths_sizes.empty()) return;
     } else {
-      static std::vector<std::tuple<fs::path, size_t, size_t>> my_file_paths;
-
-      // //
-      // // Working approach, but doesn't split by size
-      // m_comm.barrier();
-      // if (m_comm.rank0()) {
-      //   if (!m_paths.empty()) {
-      //     size_t ranks_per_file =
-      //         std::max(m_comm.size() / m_paths.size(), size_t(1));
-      //     // std::cout << "ranks_per_file = " << ranks_per_file << std::endl;
-      //     for (size_t i = 0; i < m_paths.size(); ++i) {
-      //       size_t fsize = fs::file_size(m_paths[i]);
-      //       // std::cout << "fize = " << fsize << std::endl;
-      //       size_t bytes_per_rank = (fsize / ranks_per_file) + 1;
-      //       // std::cout << "bytes_per_rank = " << bytes_per_rank <<
-      //       std::endl;
-
-      //       int dest0 = (i * ranks_per_file) % m_comm.size();
-      //       for (int d = 0; d < ranks_per_file; ++d) {
-      //         int dest = (dest0 + d) % m_comm.size();
-      //         ;
-      //         size_t bytes_begin = d * bytes_per_rank;
-
-      //         // std::cout << "bytes_begin = " << bytes_begin << std::endl;
-      //         size_t bytes_end = std::min(bytes_begin + bytes_per_rank,
-      //         fsize);
-      //         ;
-      //         // std::cout << "bytes_end = " << bytes_end << std::endl;
-      //         m_comm.async(
-      //             dest,
-      //             [](const std::string& fname, size_t bytes_begin,
-      //                size_t bytes_end) {
-      //               my_file_paths.push_back(
-      //                   {fs::path(fname), bytes_begin, bytes_end});
-      //             },
-      //             (std::string)m_paths[i], bytes_begin, bytes_end);
-      //       }
-      //     }
-      //   }
-      // }
-      // m_comm.barrier();
+      static std::vector<std::tuple<std::string, size_t, size_t>> my_file_paths;
 
       //
       //  Splits files over ranks by file size.   8MB is smallest granularity.
       //  This approach could be improved by having rank_layout information.
       m_comm.barrier();
       if (m_comm.rank0()) {
-        std::vector<std::tuple<fs::path, size_t, size_t>> remaining_files(
-            m_paths.size());
+        std::vector<std::tuple<std::string, size_t, size_t>> remaining_files(
+            m_paths_sizes.size());
         size_t total_size{0};
-        for (size_t i = 0; i < m_paths.size(); ++i) {
-          size_t fsize = fs::file_size(m_paths[i]);
-          total_size += fsize;
-          remaining_files[i] = std::make_tuple(m_paths[i], size_t(0), fsize);
+        for (size_t i = 0; i < m_paths_sizes.size(); ++i) {
+          total_size += m_paths_sizes[i].second;
+          remaining_files[i] = std::make_tuple(
+              m_paths_sizes[i].first, size_t(0), m_paths_sizes[i].second);
         }
 
         if (total_size > 0) {
@@ -151,30 +112,48 @@ class line_parser {
 
       //
       // Each rank process locally assigned files.
-      for (const auto& fname : my_file_paths) {
-        // m_comm.cout("Opening: ", std::get<0>(fname), " ", std::get<1>(fname),
-        //             " ", std::get<2>(fname));
-        std::ifstream ifs(std::get<0>(fname));
-        // Note: Current process is responsible for reading up to *AND
-        // INCLUDING* bytes_end
-        size_t bytes_begin = std::get<1>(fname);
-        size_t bytes_end   = std::get<2>(fname);
-        ASSERT_RELEASE(ifs.good());
-        ifs.imbue(std::locale::classic());
-        std::string line;
-        // Throw away line containing bytes_begin as it was read by the previous
-        // process (unless it corresponds to the beginning of a file)
-        if (bytes_begin > 0) {
-          ifs.seekg(bytes_begin);
-          std::getline(ifs, line);
+      if (m_s3_bucket.empty()) {
+        for (const auto& fname : my_file_paths) {
+          // m_comm.cout("Opening: ", std::get<0>(fname), " ",
+          // std::get<1>(fname),
+          //             " ", std::get<2>(fname));
+          std::ifstream ifs(std::get<0>(fname));
+          // Note: Current process is responsible for reading up to *AND
+          // INCLUDING* bytes_end
+          size_t bytes_begin = std::get<1>(fname);
+          size_t bytes_end   = std::get<2>(fname);
+          ASSERT_RELEASE(ifs.good());
+          // ifs.imbue(std::locale::classic());
+          std::string line;
+          // Throw away line containing bytes_begin as it was read by the
+          // previous process (unless it corresponds to the beginning of a file)
+          if (bytes_begin > 0) {
+            ifs.seekg(bytes_begin);
+            std::getline(ifs, line);
+          }
+          // Keep reading until line containing bytes_end is read
+          while (ifs.tellg() <= bytes_end && std::getline(ifs, line)) {
+            fn(line);
+            // if(ifs.tellg() > bytes_end) break;
+          }
         }
-        // Keep reading until line containing bytes_end is read
-        while (ifs.tellg() <= bytes_end && std::getline(ifs, line)) {
-          fn(line);
-          // if(ifs.tellg() > bytes_end) break;
+        my_file_paths.clear();
+
+      } else {
+        // s3 from here!
+        for (const auto& fname : my_file_paths) {
+          std::string             object        = std::get<0>(fname);
+          size_t                  bytes_begin   = std::get<1>(fname);
+          size_t                  bytes_end     = std::get<2>(fname);
+          size_t                  bytes_to_read = bytes_end - bytes_begin;
+          detail::aws_line_reader alr(m_s3_bucket, object, bytes_begin);
+          std::string             line;
+          while (alr.bytes_read() <= bytes_to_read && alr.getline(line)) {
+            fn(line);
+          }
         }
+        my_file_paths.clear();
       }
-      my_file_paths.clear();
     }
   }
 
@@ -190,34 +169,58 @@ class line_parser {
     //
     //
     for (const std::string& strp : stringpaths) {
-      fs::path p(strp);
-      if (fs::exists(p)) {
-        if (fs::is_regular_file(p)) {
-          if (is_file_good(p)) {
-            m_paths.push_back(p);
+      if (strp.rfind("s3://", 0) == 0) {
+        // AWS S3 path
+        bool found_bucket_end = false;
+        for (size_t i = 5; i < strp.size(); ++i) {
+          if (found_bucket_end) {
+            m_s3_obj_prefix.push_back(strp[i]);
+          } else {
+            if (strp[i] != '/') {
+              m_s3_bucket.push_back(strp[i]);
+            } else {
+              found_bucket_end = true;
+            }
           }
-        } else if (fs::is_directory(p)) {
-          if (recursive) {
-            //
-            // If a directory & user requested recursive
-            const std::filesystem::recursive_directory_iterator end;
-            for (std::filesystem::recursive_directory_iterator itr{p};
-                 itr != end; itr++) {
-              if (fs::is_regular_file(itr->path())) {
-                if (is_file_good(itr->path())) {
-                  m_paths.push_back(itr->path());
+        }
+        std::cout << "S3 Bucket: " << m_s3_bucket << std::endl;
+        std::cout << "S3 prefix: " << m_s3_obj_prefix << std::endl;
+        m_paths_sizes = detail::aws_list_objects(m_s3_bucket, m_s3_obj_prefix);
+        for (const auto& ps : m_paths_sizes) {
+          std::cout << ps.first << " " << ps.second << std::endl;
+        }
+      } else {
+        fs::path p(strp);
+        if (fs::exists(p)) {
+          if (fs::is_regular_file(p)) {
+            if (is_file_good(p)) {
+              m_paths_sizes.push_back({p, fs::file_size(p)});
+            }
+          } else if (fs::is_directory(p)) {
+            if (recursive) {
+              //
+              // If a directory & user requested recursive
+              const std::filesystem::recursive_directory_iterator end;
+              for (std::filesystem::recursive_directory_iterator itr{p};
+                   itr != end; itr++) {
+                if (fs::is_regular_file(itr->path())) {
+                  if (is_file_good(itr->path())) {
+                    m_paths_sizes.push_back(
+                        {itr->path(), fs::file_size(itr->path())});
+                  }
                 }
               }
-            }
-          } else {
-            //
-            // If a directory & user requested recursive
-            const std::filesystem::directory_iterator end;
-            for (std::filesystem::directory_iterator itr{p}; itr != end;
-                 itr++) {
-              if (fs::is_regular_file(itr->path())) {
-                if (is_file_good(itr->path())) {
-                  m_paths.push_back(itr->path());
+            } else {
+              //
+              // If a directory & user requested recursive
+              const std::filesystem::directory_iterator end;
+              for (std::filesystem::directory_iterator itr{p}; itr != end;
+                   itr++) {
+                if (fs::is_regular_file(itr->path())) {
+                  if (is_file_good(itr->path())) {
+                    m_paths_sizes.push_back(
+                        {itr->path(), fs::file_size(itr->path())});
+                  }
                 }
               }
             }
@@ -228,8 +231,9 @@ class line_parser {
 
     //
     // Remove duplicate paths
-    std::sort(m_paths.begin(), m_paths.end());
-    m_paths.erase(std::unique(m_paths.begin(), m_paths.end()), m_paths.end());
+    std::sort(m_paths_sizes.begin(), m_paths_sizes.end());
+    m_paths_sizes.erase(std::unique(m_paths_sizes.begin(), m_paths_sizes.end()),
+                        m_paths_sizes.end());
   }
 
   /**
@@ -247,9 +251,11 @@ class line_parser {
     }
     return good;
   }
-  ygm::comm             m_comm;
-  std::vector<fs::path> m_paths;
-  bool                  m_node_local_filesystem;
+  ygm::comm                                   m_comm;
+  std::vector<std::pair<std::string, size_t>> m_paths_sizes;
+  std::string                                 m_s3_bucket;
+  std::string                                 m_s3_obj_prefix;
+  bool                                        m_node_local_filesystem;
 };
 
 }  // namespace ygm::io

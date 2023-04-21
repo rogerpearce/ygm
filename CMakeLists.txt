@@ -158,6 +158,25 @@ else ()
    message(WARNING ${PROJECT_NAME} " did not find Arrow >= 8.0. Building without Arrow.") 
 endif ()
 
+
+
+# AWS CPP SDK
+fetchcontent_declare(
+  awscppsdk
+  GIT_REPOSITORY https://github.com/aws/aws-sdk-cpp
+  GIT_PROGRESS TRUE
+  GIT_SUBMODULES crt/aws-crt-cpp aws-cpp-sdk-core aws-cpp-sdk-s3
+  GIT_TAG master
+)
+
+if(NOT awscppsdk_POPULATED)
+  fetchcontent_populate(awscppsdk)
+  set(BUILD_ONLY "s3")
+  set(ENABLE_TESTING OFF)
+  add_subdirectory(${awscppsdk_SOURCE_DIR} ${awscppsdk_BUILD_DIR})
+endif()
+#target_link_libraries(${PROJECT_NAME} PRIVATE aws-cpp-sdk-core aws-cpp-sdk-s3)
+
 #
 # Create the YGM target library
 #
@@ -169,7 +188,7 @@ target_include_directories(
                   $<INSTALL_INTERFACE:include>
 )
 target_link_libraries(
-    ygm INTERFACE MPI::MPI_CXX Threads::Threads stdc++fs ${YGM_CEREAL_TARGET}
+    ygm INTERFACE MPI::MPI_CXX Threads::Threads stdc++fs ${YGM_CEREAL_TARGET} aws-cpp-sdk-core aws-cpp-sdk-s3
 )
 
 option(TEST_WITH_SLURM "Run tests with Slurm" OFF)
