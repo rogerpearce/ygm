@@ -90,8 +90,10 @@ std::vector<std::pair<std::string, size_t>> aws_list_objects(
           outcome.GetResult().GetContents();
 
       for (Aws::S3::Model::Object& object : objects) {
-        to_return.push_back({object.GetKey(), object.GetSize()});
-        // std::cout << object.GetKey() << " " << object.GetSize() << std::endl;
+        std::cout << object.GetKey() << " " << object.GetSize() << std::endl;
+        if(object.GetSize() > 0) {
+          to_return.push_back({object.GetKey(), object.GetSize()});
+        }
       }
     }
   }
