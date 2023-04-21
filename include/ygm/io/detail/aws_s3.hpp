@@ -42,7 +42,8 @@ class aws_line_reader {
          break;
        }
        using namespace std::chrono_literals;
-       std::this_thread::sleep_for(5ms);
+       std::this_thread::sleep_for(500ms);
+       std::cout << "Retrying " << object << std::endl;
      }
     } while(!outcome.IsSuccess());
 
