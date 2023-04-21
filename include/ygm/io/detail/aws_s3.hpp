@@ -12,7 +12,7 @@ namespace ygm::io::detail {
 class aws_options_init {
  public:
   aws_options_init() {
-    options.loggingOptions.logLevel = Aws::Utils::Logging::LogLevel::Debug;
+    //options.loggingOptions.logLevel = Aws::Utils::Logging::LogLevel::Debug;
     InitAPI(options);
   }
   ~aws_options_init() { ShutdownAPI(options); }
