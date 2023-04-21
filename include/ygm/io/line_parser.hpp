@@ -55,12 +55,16 @@ class line_parser {
       if (m_paths_sizes.empty()) return;
     } else {
       static std::vector<std::tuple<std::string, size_t, size_t>> my_file_paths;
-
+      static std::string& s_s3_bucket = m_s3_bucket;
       //
       //  Splits files over ranks by file size.   8MB is smallest granularity.
       //  This approach could be improved by having rank_layout information.
       m_comm.barrier();
       if (m_comm.rank0()) {
+        if (not m_s3_bucket.empty()) {
+          m_comm.async_bcast([](std::string s) { s_s3_bucket = s; },
+                             m_s3_bucket);
+        }
         std::vector<std::tuple<std::string, size_t, size_t>> remaining_files(
             m_paths_sizes.size());
         size_t total_size{0};
