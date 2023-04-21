@@ -4,6 +4,8 @@
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/Object.h>
+#include <chrono>
+#include <thread>
 
 namespace ygm::io::detail {
 
@@ -32,7 +34,16 @@ class aws_line_reader {
       request.SetRange(sstr.str());
     }
 
+    size_t attempts = 0;
+    do {
     outcome = client.GetObject(request);
+     if(!outcome.IsSuccess()) {
+       if(++attempts > 10) {
+         break;
+       }
+       std::this_thread::sleep_for(5ms)
+     }
+    } while(!outcome.IsSuccess());
 
     if (!outcome.IsSuccess()) {
       const Aws::S3::S3Error& err = outcome.GetError();
