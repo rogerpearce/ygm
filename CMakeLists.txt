@@ -173,7 +173,7 @@ if(NOT awscppsdk_POPULATED)
   fetchcontent_populate(awscppsdk)
   set(BUILD_ONLY "s3")
   set(ENABLE_TESTING OFF)
-  add_subdirectory(${awscppsdk_SOURCE_DIR} ${awscppsdk_BUILD_DIR})
+  add_subdirectory(${awscppsdk_SOURCE_DIR} ${awscppsdk_BUILD_DIR} build)
 endif()
 #target_link_libraries(${PROJECT_NAME} PRIVATE aws-cpp-sdk-core aws-cpp-sdk-s3)
 
