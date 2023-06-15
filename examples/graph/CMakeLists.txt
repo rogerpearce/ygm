@@ -5,4 +5,5 @@
 
 add_ygm_example(connected_components_lp)
 add_ygm_example(kcore)
+add_ygm_example(bfs)
 add_ygm_example(sort_edge_list)
