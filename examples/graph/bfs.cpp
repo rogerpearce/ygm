@@ -77,7 +77,9 @@ int main(int argc, char **argv) {
       next_level.swap(current_level);
       level_number++;
     }
+    world.cout0("Total Visited = ", visited.size());
   }
+  world.cout0("Elapsed Time = ", timer.elapsed());
 
   return 0;
 }
