@@ -19,3 +19,4 @@ add_ygm_example(lambda_optional_arguments)
 
 add_subdirectory(container)
 add_subdirectory(io)
+add_subdirectory(graph)

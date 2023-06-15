@@ -91,7 +91,7 @@ class comm_environment {
 
   //
   // variables with their default values
-  size_t buffer_size = 16 * 1024 * 1024;
+  size_t buffer_size = 128 * 1024 * 1024;
 
   size_t irecv_size = 1024 * 1024 * 1024;
   size_t num_irecvs = 8;
