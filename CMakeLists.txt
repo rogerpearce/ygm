@@ -152,6 +152,8 @@ install(FILES "${PROJECT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
 )
 
 if (YGM_BUILD_TESTS)
+    option(TEST_WITH_SLURM "Run tests with Slurm" OFF)
+    enable_testing()
     add_subdirectory(test)
 endif ()
 if (YGM_BUILD_TOOLS)

@@ -3,9 +3,6 @@
 #
 # SPDX-License-Identifier: MIT
 
-option(TEST_WITH_SLURM "Run tests with Slurm" OFF)
-enable_testing()
-
 #
 # This function adds a Sequential test.
 #
