@@ -85,8 +85,6 @@ if(NOT boost_POPULATED)
         set(BOOST_INCLUDE_LIBRARIES json)
         FetchContent_MakeAvailable(Boost)
     endif ()
-else ()
-    message("YGM:  Boost already populated")
 endif()
 
 #
