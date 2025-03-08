@@ -58,6 +58,7 @@ include(FetchContent)
 if(NOT cereal_POPULATED)
     find_package(cereal CONFIG QUIET)
     if (NOT cereal_FOUND)
+        set(JUST_INSTALL_CEREAL TRUE)
         FetchContent_Declare(
             cereal
             GIT_REPOSITORY https://github.com/USCiLab/cereal.git
