@@ -70,7 +70,7 @@ endif()
 #
 # Boost
 #
-if(NOT Boost_POPULATED)
+if(NOT boost_POPULATED)
     find_package(Boost 1.78)
     if (Boost_FOUND)
         message(STATUS ${PROJECT_NAME} " found boost include dirs: "
@@ -84,6 +84,8 @@ if(NOT Boost_POPULATED)
         set(BOOST_INCLUDE_LIBRARIES json)
         FetchContent_MakeAvailable(Boost)
     endif ()
+else ()
+    message("YGM:  Boost already populated")
 endif()
 
 #
