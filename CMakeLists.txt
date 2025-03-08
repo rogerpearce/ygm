@@ -107,9 +107,8 @@ target_include_directories(
                   $<INSTALL_INTERFACE:include>
 )
 target_link_libraries(
-    ygm INTERFACE MPI::MPI_CXX Threads::Threads stdc++fs rt cereal::cereal
+    ygm PUBLIC INTERFACE MPI::MPI_CXX Threads::Threads stdc++fs rt cereal
 )
-
 
 
 # Install ygm. Expects CMAKE_INSTALL_PREFIX to be set to a suitable directory.
@@ -120,8 +119,8 @@ include(CMakePackageConfigHelpers)
 set(YGM_EXPORT_TARGETS ygm)
 
 install(
-    TARGETS ${PROJECT_NAME}
-    EXPORT ${PROJECT_NAME}Targets
+    TARGETS ${PROJECT_NAME} cereal
+    EXPORT ${PROJECT_NAME}Targets 
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
