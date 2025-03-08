@@ -113,9 +113,6 @@ target_link_libraries(
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-# List libraries to be installed
-set(YGM_EXPORT_TARGETS ygm)
-
 install(
     TARGETS ${PROJECT_NAME} cereal
     EXPORT ${PROJECT_NAME}Targets 
@@ -155,7 +152,6 @@ install(FILES "${PROJECT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
 )
 
 if (YGM_BUILD_TESTS)
-    option(TEST_WITH_SLURM "Run tests with Slurm" OFF)
     add_subdirectory(test)
 endif ()
 if (YGM_BUILD_TOOLS)
